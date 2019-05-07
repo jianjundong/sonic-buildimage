@@ -152,7 +152,7 @@ int scheduler_csm_read_callback(struct CSM* csm)
         /*usleep(100);*/
     }
     
-    data_len = ldp_hdr->msg_len - MSG_L_INCLUD_U_BIT_MSG_T_L_FIELDS;
+    data_len = ntohs(ldp_hdr->msg_len) - MSG_L_INCLUD_U_BIT_MSG_T_L_FIELDS;
     pos = 0;
     while(data_len > 0)
     {
@@ -171,7 +171,7 @@ int scheduler_csm_read_callback(struct CSM* csm)
         /*usleep(100);*/
     }
     
-    retval = iccp_csm_init_msg(&msg, peer_msg, ldp_hdr->msg_len + MSG_L_INCLUD_U_BIT_MSG_T_L_FIELDS);
+    retval = iccp_csm_init_msg(&msg, peer_msg, ntohs(ldp_hdr->msg_len) + MSG_L_INCLUD_U_BIT_MSG_T_L_FIELDS);
     if (retval == 0) 
     {
         iccp_csm_enqueue_msg(csm, msg);

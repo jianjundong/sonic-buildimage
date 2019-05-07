@@ -29,6 +29,7 @@ COPY ["start.sh", "iccpd.sh", "/usr/bin/"]
 COPY ["supervisord.conf", "/etc/supervisor/conf.d/"]
 COPY ["iccpd.j2", "/usr/share/sonic/templates/"]
 
+RUN chmod +x /usr/bin/start.sh /usr/bin/iccpd.sh
 RUN apt-get clean -y; apt-get autoclean -y; apt-get autoremove -y
 RUN rm -rf /debs
 

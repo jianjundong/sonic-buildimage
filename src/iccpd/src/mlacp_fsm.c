@@ -379,7 +379,7 @@ static void mlacp_sync_recv_syncData(struct CSM* csm, struct Msg* msg)
     mLACPSyncDataTLV* syncdata = NULL;
     
     syncdata = (mLACPSyncDataTLV*)&(msg->buf[sizeof(ICCHdr)]);
-    if(syncdata->flags == 1) 
+    if(ntohs(syncdata->flags) == 1) 
     {
         /* Sync done*/
         MLACP(csm).wait_for_sync_data = 0;
@@ -392,7 +392,7 @@ static void mlacp_sync_recv_syncReq(struct CSM* csm, struct Msg* msg)
 {
     mLACPSyncReqTLV* mlacp_sync_req = NULL;
     mlacp_sync_req = (mLACPSyncReqTLV*) &msg->buf[sizeof(ICCHdr)];
-    MLACP(csm).sync_req_num = mlacp_sync_req->req_num;
+    MLACP(csm).sync_req_num = ntohs(mlacp_sync_req->req_num);
     
     /* Reply the peer all sync info*/
     mlacp_sync_send_all_info_handler(csm);
@@ -760,7 +760,7 @@ static void mlacp_sync_send_nak_handler(struct CSM* csm,  struct Msg* msg)
     ICCPD_LOG_WARN("mlacp_fsm", "  ### Send NAK ###");
     
     memset(g_csm_buf, 0, CSM_BUFFER_SIZE);
-    csm->app_csm.invalid_msg_id = icc_hdr->ldp_hdr.msg_id;
+    csm->app_csm.invalid_msg_id = ntohl(icc_hdr->ldp_hdr.msg_id);    
     msg_len = app_csm_prepare_nak_msg(csm, g_csm_buf, CSM_BUFFER_SIZE);
     iccp_csm_send(csm, g_csm_buf, msg_len);
 }
@@ -779,7 +779,7 @@ static void mlacp_sync_recv_nak_handler(struct CSM* csm,  struct Msg* msg)
     /* Check NAK Type*/
     for(i=0; i<MAX_MSG_LOG_SIZE; ++i)
     {
-        if(naktlv->rejected_msg_id == csm->msg_log.msg[i].msg_id)
+        if(ntohl(naktlv->rejected_msg_id) == csm->msg_log.msg[i].msg_id)
         {
             tlvType = csm->msg_log.msg[i].tlv;
             break;
@@ -981,7 +981,7 @@ static void mlacp_stage_sync_send_handler(struct CSM* csm, struct Msg* msg)
             {
                 mlacp_sync_req = (mLACPSyncReqTLV*) &msg->buf[sizeof(ICCHdr)];
                 MLACP(csm).wait_for_sync_data = 1;
-                MLACP(csm).sync_req_num = mlacp_sync_req->req_num;
+                MLACP(csm).sync_req_num = ntohs(mlacp_sync_req->req_num);
                 
                 /* Reply the peer all sync info*/
                 mlacp_sync_send_all_info_handler(csm);

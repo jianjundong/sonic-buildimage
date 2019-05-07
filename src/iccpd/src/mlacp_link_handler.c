@@ -35,8 +35,7 @@
 #include "../include/logger.h"
 #include "../include/mlacp_tlv.h"
 
-#include "../include/mlacp_link_handler.h"
-
+#include "../include/iccp_csm.h"
 #include "mclagdctl/mclagdctl.h"
 
 /*****************************************
@@ -55,6 +54,21 @@ typedef enum route_manipulate_type {
 *
 * ***************************************/
 char g_ipv4_str[INET_ADDRSTRLEN];
+
+/*****************************************
+* Tool : show ip string
+*
+* ***************************************/
+char *show_ip_str(uint32_t ipv4_addr)
+{
+    struct in_addr in_addr;
+    
+    memset(g_ipv4_str, 0 ,sizeof(g_ipv4_str));
+    in_addr.s_addr = ipv4_addr;
+    inet_ntop(AF_INET, &in_addr, g_ipv4_str, INET_ADDRSTRLEN);
+    
+    return g_ipv4_str;
+}
 
 static int arp_set_handler(struct CSM* csm,
                                   struct LocalInterface* lif,
@@ -95,7 +109,7 @@ add_arp:
                    
         mlacp_fsm_arp_set(arp_msg->ifname, arp_msg->ipv4_addr, mac_str);
         ICCPD_LOG_DEBUG(__FUNCTION__, "Add dynamic ARP to kernel [%s]",
-                        show_ip_str(arp_msg->ipv4_addr));
+                        show_ip_str(htonl(arp_msg->ipv4_addr)));
     }
     goto done;
     
@@ -116,7 +130,7 @@ del_arp:
         mlacp_fsm_arp_del(arp_msg->ifname, arp_msg->ipv4_addr);
         /* link broken, del all static arp on the lif*/
         ICCPD_LOG_DEBUG(__FUNCTION__, "Del dynamic ARP [%s]",
-                        show_ip_str(arp_msg->ipv4_addr));
+                        show_ip_str(htonl(arp_msg->ipv4_addr)));
     }
 
 done:
@@ -224,7 +238,7 @@ static void set_l3_itf_state(struct CSM *csm,
         /*set_default_route(csm);*/
 
         ICCPD_LOG_DEBUG(__FUNCTION__, "  route set Interface = %s   route type = %d   route = %s   nexthop via = %s ", 
-            set_l3_local_if->name, route_type, show_ip_str(set_l3_local_if->ipv4_addr), csm->peer_ip );
+            set_l3_local_if->name, route_type, show_ip_str(htonl(set_l3_local_if->ipv4_addr)), csm->peer_ip );
         
         /* set static route*/
         if(route_type == ROUTE_ADD)
@@ -294,7 +308,7 @@ void set_peerlink_mlag_port_learn (struct LocalInterface *lif, int enable)
 {
     struct IccpSyncdHDr * msg_hdr;
     mclag_sub_option_hdr_t * sub_msg;
-    char msg_buf[4096];
+    char msg_buf[4096] = {0};
     int msg_len;
     struct System *sys;
     
@@ -750,11 +764,11 @@ void syn_arp_info_to_peer(struct CSM *csm, struct LocalInterface *local_if)
             {
                 TAILQ_INSERT_TAIL(&(MLACP(csm).arp_msg_list), msg_send, tail);
                 ICCPD_LOG_DEBUG( __FUNCTION__, "Enqueue ARP[ADD] for %s",
-                               show_ip_str(arp_msg->ipv4_addr));
+                               show_ip_str(htonl(arp_msg->ipv4_addr)));
             }
             else 
                 ICCPD_LOG_DEBUG(__FUNCTION__, "Failed to enqueue ARP[ADD] for %s",
-                                show_ip_str(arp_msg->ipv4_addr));
+                                show_ip_str(htonl(arp_msg->ipv4_addr)));
         }
     }
 
@@ -1262,21 +1276,6 @@ void mlacp_mlag_link_del_handler(struct CSM *csm, struct LocalInterface *lif)
     return;
 }
 
-/*****************************************
-* Tool : show ip string
-*
-* ***************************************/
-char *show_ip_str(uint32_t ipv4_addr)
-{
-    struct in_addr in_addr;
-    
-    memset(g_ipv4_str, 0 ,sizeof(g_ipv4_str));
-    in_addr.s_addr = ipv4_addr;
-    inet_ntop(AF_INET, &in_addr, g_ipv4_str, INET_ADDRSTRLEN);
-    
-    return g_ipv4_str;
-}
-
 int iccp_connect_syncd()
 {
     struct System* sys = NULL;
@@ -1367,13 +1366,11 @@ void syncd_info_close()
     int n=0;
     int count = 0;
     int i =0;
-    int need_free = 0;
     char *msg_buf = g_csm_buf;
     struct LocalInterface* lif = NULL;	
     struct IccpSyncdHDr * msg_hdr;
     struct mclag_fdb_info * mac_info;
     static time_t last_time = 0;
-    char* data = &msg_buf[sizeof(struct IccpSyncdHDr)];
     
     if(sys == NULL)
         return -1;

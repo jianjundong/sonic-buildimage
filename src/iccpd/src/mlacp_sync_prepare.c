@@ -32,8 +32,9 @@
 #include "../include/logger.h"
 #include "../include/mlacp_fsm.h"
 #include "../include/mlacp_tlv.h"
-#include "../include/mlacp_link_handler.h"
+//#include "../include/mlacp_link_handler.h"
 #include "../include/iccp_ifm.h"
+#include "../include/iccp_csm.h"
 
 #define SET_MAC_STR(buf, macArray) \
             snprintf(buf, 64, "%02x:%02x:%02x:%02x:%02x:%02x",\
@@ -236,14 +237,17 @@ int mlacp_prepare_for_sync_request_tlv(struct CSM* csm, char* buf, size_t max_bu
     /* mLACP Synchronization Request TLV */
     tlv->icc_parameter.u_bit = 0;
     tlv->icc_parameter.f_bit = 0;
-    tlv->icc_parameter.len = sizeof(mLACPSyncReqTLV) - sizeof(ICCParameter);
-    tlv->icc_parameter.type = TLV_T_MLACP_SYNC_REQUEST;
+    tlv->icc_parameter.type = htons(TLV_T_MLACP_SYNC_REQUEST);
+    tlv->icc_parameter.len = htons(sizeof(mLACPSyncReqTLV) - sizeof(ICCParameter));
     
     tlv->req_num = 0;
-    MLACP(csm).sync_req_num = tlv->req_num;
+    MLACP(csm).sync_req_num = 0;
+    
     tlv->c_bit = 1;
     tlv->s_bit = 1;
-    tlv->req_type = 0x3FFF;
+    tlv->req_type = 0x3FFF;    
+    *(uint16_t *)((uint8_t *)tlv+sizeof(ICCParameter)+sizeof(uint16_t)) = htons(*(uint16_t *)((uint8_t *)tlv+sizeof(ICCParameter)+sizeof(uint16_t)));
+    
     tlv->port_num_agg_id = 0;
     tlv->actor_key = 0;
     
@@ -285,14 +289,14 @@ int mlacp_prepare_for_sync_data_tlv(struct CSM* csm, char* buf, size_t max_buf_s
     /* mLACP Synchronization Data TLV */
     tlv->icc_parameter.u_bit = 0;
     tlv->icc_parameter.f_bit = 0;
-    tlv->icc_parameter.len = sizeof(mLACPSyncDataTLV) - sizeof(ICCParameter);
-    tlv->icc_parameter.type = TLV_T_MLACP_SYNC_DATA;
+    tlv->icc_parameter.type = htons(TLV_T_MLACP_SYNC_DATA);    
+    tlv->icc_parameter.len = htons(sizeof(mLACPSyncDataTLV) - sizeof(ICCParameter));
     
-    tlv->req_num = MLACP(csm).sync_req_num;
+    tlv->req_num = htons(MLACP(csm).sync_req_num);
     if(end == 0)
         tlv->flags = 0x00;
     else
-        tlv->flags = 0x01;
+        tlv->flags = htons(0x01);
     
     return msg_len;
 }
@@ -332,11 +336,11 @@ int mlacp_prepare_for_sys_config(struct CSM* csm,char* buf, size_t max_buf_size)
     /* System Config TLV */
     tlv->icc_parameter.u_bit = 0;
     tlv->icc_parameter.f_bit = 0;
-    tlv->icc_parameter.len = sizeof(mLACPSysConfigTLV) - sizeof(ICCParameter);
-    tlv->icc_parameter.type = TLV_T_MLACP_SYSTEM_CONFIG;
+    tlv->icc_parameter.type = htons(TLV_T_MLACP_SYSTEM_CONFIG);
+    tlv->icc_parameter.len = htons(sizeof(mLACPSysConfigTLV) - sizeof(ICCParameter));
     
     memcpy(tlv->sys_id, MLACP(csm).system_id, ETHER_ADDR_LEN);
-    tlv->sys_priority = MLACP(csm).system_priority;
+    tlv->sys_priority = htons(MLACP(csm).system_priority);
     tlv->node_id = MLACP(csm).node_id;
     return msg_len;
 }
@@ -379,12 +383,12 @@ int mlacp_prepare_for_Aggport_state(struct CSM* csm,char* buf, size_t max_buf_si
     /* Port State TLV */
     tlv->icc_parameter.u_bit = 0;
     tlv->icc_parameter.f_bit = 0;
-    tlv->icc_parameter.len = sizeof(mLACPAggPortStateTLV) - sizeof(ICCParameter);
-    tlv->icc_parameter.type = TLV_T_MLACP_AGGREGATOR_STATE;
+    tlv->icc_parameter.type = htons(TLV_T_MLACP_AGGREGATOR_STATE);
+    tlv->icc_parameter.len = htons(sizeof(mLACPAggPortStateTLV) - sizeof(ICCParameter));
     
     tlv->partner_sys_priority = 0;
     tlv->partner_key = 0;
-    tlv->agg_id = local_if->po_id;
+    tlv->agg_id = htons(local_if->po_id);
     tlv->actor_key = 0;
     tlv->agg_state = local_if->state;
     
@@ -424,10 +428,10 @@ int mlacp_prepare_for_Aggport_config(struct CSM* csm,
     /* Port Config TLV */
     tlv->icc_parameter.u_bit = 0;
     tlv->icc_parameter.f_bit = 0;
-    tlv->icc_parameter.len = sizeof(mLACPAggConfigTLV) - sizeof(ICCParameter);
-    tlv->icc_parameter.type = TLV_T_MLACP_AGGREGATOR_CONFIG;
+    tlv->icc_parameter.type = htons(TLV_T_MLACP_AGGREGATOR_CONFIG);
     
-    tlv->agg_id = lif->po_id;
+    tlv->icc_parameter.len = htons(sizeof(mLACPAggConfigTLV) - sizeof(ICCParameter));    
+    tlv->agg_id = htons(lif->po_id);
     if(purge_flag == 1)
     tlv->flags = 0x02; /*purge*/
     else
@@ -470,12 +474,12 @@ int mlacp_prepare_for_mac_info_to_peer(struct CSM* csm, char* buf, size_t max_bu
     memset(tlv, 0, tlv_len);
     tlv->icc_parameter.u_bit = 0;
     tlv->icc_parameter.f_bit = 0;
-    tlv->icc_parameter.type = TLV_T_MLACP_MAC_INFO;
-    tlv->icc_parameter.len = tlv_len - sizeof(ICCParameter);
+    tlv->icc_parameter.type = htons(TLV_T_MLACP_MAC_INFO);    
+    tlv->icc_parameter.len = htons(tlv_len - sizeof(ICCParameter));
     tlv->type = mac_msg->op_type;
     sprintf(tlv->mac_str, "%s", mac_msg->mac_str);
     sprintf(tlv->ifname, "%s", mac_msg->origin_ifname);
-    tlv->vid = mac_msg->vid;
+    tlv->vid = htons(mac_msg->vid);
     
     /* Fill MAC Information TLV */
     memcpy(&buf[sizeof(ICCHdr)], tlv, tlv_len);
@@ -520,11 +524,11 @@ int mlacp_prepare_for_arp_info(struct CSM* csm, char* buf, size_t max_buf_size, 
     memset(tlv, 0, tlv_len);
     tlv->icc_parameter.u_bit = 0;
     tlv->icc_parameter.f_bit = 0;
-    tlv->icc_parameter.type = TLV_T_MLACP_ARP_INFO;
-    tlv->icc_parameter.len = tlv_len - sizeof(ICCParameter);
+    tlv->icc_parameter.type = htons(TLV_T_MLACP_ARP_INFO);    
+    tlv->icc_parameter.len = htons(tlv_len - sizeof(ICCParameter));
     tlv->type = arp_msg->op_type;
     sprintf(tlv->ifname, "%s", arp_msg->ifname);
-    tlv->ipv4_addr = arp_msg->ipv4_addr;
+    tlv->ipv4_addr = htonl(arp_msg->ipv4_addr);
     memcpy(tlv->mac_addr, arp_msg->mac_addr, ETHER_ADDR_LEN);
     
     /* Fill ARP Information TLV */
@@ -587,32 +591,32 @@ int mlacp_prepare_for_port_channel_info(struct CSM* csm, char* buf,
     /* Port Channel Info TLV */
     tlv->icc_parameter.u_bit = 0;
     tlv->icc_parameter.f_bit = 0;
-    tlv->icc_parameter.len = sizeof(struct mLACPPortChannelInfoTLV) - sizeof(ICCParameter) + sizeof(struct VLAN_ID) *num_of_vlan_id ;
-    tlv->icc_parameter.type = TLV_T_MLACP_PORT_CHANNEL_INFO;
-    tlv->agg_id = port_channel->po_id;
+    tlv->icc_parameter.type = htons(TLV_T_MLACP_PORT_CHANNEL_INFO);    
+    tlv->icc_parameter.len = htons(sizeof(struct mLACPPortChannelInfoTLV) - sizeof(ICCParameter) + sizeof(struct VLAN_ID) *num_of_vlan_id) ;    
+    tlv->agg_id = htons(port_channel->po_id);
     tlv->ipv4_addr = htonl(port_channel->ipv4_addr);
     tlv->l3_mode = port_channel->l3_mode;
-    tlv->po_id = port_channel->po_id;
+    tlv->po_id = htons(port_channel->po_id);
 
     if(strlen(port_channel->name) < name_len)
         name_len = strlen(port_channel->name);
     memcpy(tlv->if_name, port_channel->name, name_len);
     tlv->if_name_len = name_len;
-    tlv->num_of_vlan_id = num_of_vlan_id;
+    tlv->num_of_vlan_id = htons(num_of_vlan_id);
     
     num_of_vlan_id = 0;
     LIST_FOREACH(vlan_id, &(port_channel->vlan_list), port_next)
     {
         if (vlan_id != NULL ) 
         {
-            tlv->vlanData[num_of_vlan_id].vlan_id = vlan_id->vid;
+            tlv->vlanData[num_of_vlan_id].vlan_id = htons(vlan_id->vid);
                 
             num_of_vlan_id++;
             ICCPD_LOG_DEBUG(__FUNCTION__, "  port channel %d: addr = %s vlan id %d     num %d ", port_channel->po_id, show_ip_str( tlv->ipv4_addr), vlan_id->vid, num_of_vlan_id );
         }
     }   
 
-    ICCPD_LOG_DEBUG(__FUNCTION__, "  port channel %d: addr = 0x%08x l3 mode %d", port_channel->po_id, tlv->ipv4_addr,  tlv->l3_mode);
+    ICCPD_LOG_DEBUG(__FUNCTION__, "  port channel %d: addr = %s  l3 mode %d", port_channel->po_id, show_ip_str( tlv->ipv4_addr),  tlv->l3_mode);
     
     return msg_len;
 }
@@ -657,9 +661,9 @@ int mlacp_prepare_for_port_peerlink_info(struct CSM* csm, char* buf,
     /* Port Channel Info TLV */
     tlv->icc_parameter.u_bit = 0;
     tlv->icc_parameter.f_bit = 0;
-    tlv->icc_parameter.len = tlv_len - sizeof(ICCParameter) ;
-    tlv->icc_parameter.type = TLV_T_MLACP_PEERLINK_INFO;
-
+    tlv->icc_parameter.type = htons(TLV_T_MLACP_PEERLINK_INFO);
+    
+    tlv->icc_parameter.len = htons(tlv_len - sizeof(ICCParameter)) ;
     memcpy(tlv->if_name, peerlink_port->name, MAX_L_PORT_NAME);
     tlv->port_type = peerlink_port->type;
   
@@ -705,9 +709,9 @@ int mlacp_prepare_for_heartbeat(struct CSM* csm,char* buf, size_t max_buf_size)
     /* System Config TLV */
     tlv->icc_parameter.u_bit = 0;
     tlv->icc_parameter.f_bit = 0;
-    tlv->icc_parameter.len = sizeof(struct mLACPHeartbeatTLV) - sizeof(ICCParameter);
-    tlv->icc_parameter.type = TLV_T_MLACP_HEARTBEAT;
+    tlv->icc_parameter.type = htons(TLV_T_MLACP_HEARTBEAT);
     
+    tlv->icc_parameter.len = htons(sizeof(struct mLACPHeartbeatTLV) - sizeof(ICCParameter));    
     tlv->heartbeat = 0xFF;
     return msg_len;
 }
@@ -723,9 +727,10 @@ static int mlacp_fill_icc_header(struct CSM* csm, ICCHdr* icc_hdr, size_t msg_le
     
     /* ICC header */
     icc_hdr->ldp_hdr.u_bit = 0x0;
-    icc_hdr->ldp_hdr.msg_type = MSG_T_RG_APP_DATA;
-    icc_hdr->ldp_hdr.msg_len = msg_len - MSG_L_INCLUD_U_BIT_MSG_T_L_FIELDS;
-    icc_hdr->ldp_hdr.msg_id = ICCP_MSG_ID;
+    icc_hdr->ldp_hdr.msg_type = htons(MSG_T_RG_APP_DATA);
+    
+    icc_hdr->ldp_hdr.msg_len = htons(msg_len - MSG_L_INCLUD_U_BIT_MSG_T_L_FIELDS);
+    icc_hdr->ldp_hdr.msg_id = htonl(ICCP_MSG_ID);
     ICCP_MSG_ID++;
     iccp_csm_fill_icc_rg_id_tlv(csm, icc_hdr);
     
@@ -773,7 +778,7 @@ void iccp_set_portchannel_ipadd_mac(struct LocalInterface *lif,uint8_t * mac_add
     dst_len = strlen(mac_addr);  
     memcpy(sub_msg->data, mac_addr, dst_len);	
 
-    ICCPD_LOG_DEBUG(__FUNCTION__,"lif name %s    address %s mac    msg data %s  %d \n", lif->name , show_ip_str(lif->ipv4_addr), sub_msg->data  ,dst_len);
+    ICCPD_LOG_DEBUG(__FUNCTION__,"lif name %s    address %s mac    msg data %s  %d \n", lif->name , show_ip_str(htonl(lif->ipv4_addr)), sub_msg->data  ,dst_len);
 
     sub_msg->op_len = dst_len;
     msg_hdr->len += sizeof(mclag_sub_option_hdr_t);    

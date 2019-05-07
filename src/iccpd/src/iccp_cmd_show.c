@@ -30,7 +30,6 @@
 #include "../include/system.h"
 #include "../include/logger.h"
 #include "mclagdctl/mclagdctl.h"
-#include "../include/mlacp_link_handler.h"
 #include "../include/iccp_cmd_show.h"
 
 int iccp_mclag_config_dump(char * *buf,  int *num, int mclag_id) 
@@ -171,7 +170,7 @@ int iccp_arp_dump(char * *buf, int *num, int mclag_id)
             
             mclagd_arp.op_type = iccpd_arp->op_type;
             memcpy(mclagd_arp.ifname, iccpd_arp->ifname, strlen(iccpd_arp->ifname));
-            memcpy(mclagd_arp.ipv4_addr, show_ip_str(iccpd_arp->ipv4_addr), 16);
+            memcpy(mclagd_arp.ipv4_addr, show_ip_str(htonl(iccpd_arp->ipv4_addr)), 16);
             memcpy(mclagd_arp.mac_addr, iccpd_arp->mac_addr, 6);
            
             memcpy(arp_buf + MCLAGD_REPLY_INFO_HDR +arp_num*sizeof(struct mclagd_arp_msg), 

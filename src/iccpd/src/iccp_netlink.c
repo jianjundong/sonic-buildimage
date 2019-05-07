@@ -375,16 +375,15 @@ void update_local_system_id(struct LocalInterface* local_if)
         ICCPD_LOG_WARN(__FUNCTION__, "Failed to obtain System instance.");
         return;
     }
-
-    if (local_if->type != IF_T_PORT_CHANNEL && local_if->po_id == -1)
+                            
+    if (local_if->type != IF_T_PORT_CHANNEL)
         return;	
       
     /* traverse all CSM */
     LIST_FOREACH(csm, &(sys->csm_list), next)
     {
         /* sync system info from one port-channel device*/			
-        if(memcmp(MLACP(csm).system_id, local_if->mac_addr, ETHER_ADDR_LEN) != 0 ||
-        	memcmp(MLACP(csm).remote_system.system_id, local_if->mac_addr, ETHER_ADDR_LEN) != 0)
+        if(memcmp(MLACP(csm).system_id, local_if->mac_addr, ETHER_ADDR_LEN) != 0)
         {
             memcpy(MLACP(csm).system_id, local_if->mac_addr, ETHER_ADDR_LEN);
             MLACP(csm).system_config_changed = 1;
@@ -404,7 +403,7 @@ void iccp_event_handler_obj_input_newlink(struct nl_object *obj, void *arg)
     struct rtnl_link *link;
     unsigned int *event = arg;
     uint32_t ifindex;
-    char * ifname;
+    char * ifname, *p;
     struct LocalInterface *lif = NULL;
     struct nl_addr *nl_addr;
     int addr_type = 0;
@@ -419,7 +418,26 @@ void iccp_event_handler_obj_input_newlink(struct nl_object *obj, void *arg)
     if (nl_addr)
         addr_type = nl_addr_guess_family(nl_addr);
 
-    lif = local_if_find_by_ifindex(ifindex);
+    /*Vxlan tunnel dev name is like VTTNL0001-1000, VTTNL0001 is vxlan tunnel name, 1000 is vni*/
+    /*If dev is vxlan tunnel, only create the tunnel with name no vni, like VTTNL0001*/
+    if ((strncmp(ifname, "VTT", 3) == 0))
+    {
+        /*Change ifname from VTTNL0001-1000 to VTTNL0001*/
+        if((p = strchr(ifname,'-')) != NULL)
+        {
+            *p = '\0';
+        }
+        /*Create vxlan tunnel dev, state is always UP*/
+        lif = local_if_find_by_name(ifname);
+        if(!lif)
+        {
+            lif = local_if_create(ifindex, ifname, IF_T_VXLAN);
+            lif->state = PORT_STATE_UP;
+        }
+        return;
+    }
+    else
+        lif = local_if_find_by_ifindex(ifindex);
 
     if (!lif)
     {
@@ -510,7 +528,7 @@ void iccp_event_handler_obj_input_dellink(struct nl_object *obj, void *arg)
     link = (struct rtnl_link *) obj;
 
     ifindex = rtnl_link_get_ifindex(link);
-    if ((lif = local_if_find_by_ifindex(ifindex)))
+    if (lif = local_if_find_by_ifindex(ifindex))
         local_if_destroy(lif->name);
 
     return;
@@ -557,17 +575,11 @@ void iccp_event_handler_obj_input_dellink(struct nl_object *obj, void *arg)
     {
         if (rth->rta_type == IFA_ADDRESS) 
         {
-            uint32_t ipaddr = htonl(*((uint32_t *)RTA_DATA(rth)));
+            uint32_t ipaddr = ntohl(*((uint32_t *)RTA_DATA(rth)));
             lif->ipv4_addr = ipaddr;
             lif->prefixlen = ifa->ifa_prefixlen;
             lif->l3_mode = 1;
-            ICCPD_LOG_DEBUG(__FUNCTION__," if name %s   index %d    address %d.%d.%d.%d\n",
-            lif->name,
-            ifa->ifa_index ,
-            (ipaddr >> 24) & 0xff,
-            (ipaddr >> 16) & 0xff,
-            (ipaddr >> 8) & 0xff,
-            ipaddr & 0xff);
+            ICCPD_LOG_DEBUG(__FUNCTION__," if name %s   index %d    address %s \n",lif->name,lif->ifindex,show_ip_str(htonl(lif->ipv4_addr)));
         }	    
         rth = RTA_NEXT(rth, rtl);
     }
@@ -918,24 +930,20 @@ static int iccp_receive_arp_packet_handler(struct System *sys)
     }
 
     /* Sanity checks */
-    if (n < sizeof(*a) ||
-        (a->ar_op != htons(ARPOP_REQUEST) &&
-         a->ar_op != htons(ARPOP_REPLY)) ||
+    /*Only process ARPOP_REPLY*/   
+    if (n < sizeof(*a) ||        
+         a->ar_op != htons(ARPOP_REPLY) ||
         a->ar_pln != 4 ||
         a->ar_pro != htons(ETH_P_IP) ||
         a->ar_hln != sll.sll_halen ||
         sizeof(*a) + 2*4 + 2*a->ar_hln > n)
     	return -1;
-
-    /*Only process ARPOP_REPLY*/
-    if(a->ar_op == htons(ARPOP_REQUEST))
-        return 0;
         
     ifindex = sll.sll_ifindex;
-    memcpy(mac_addr,  (char*)(a+1), 6);
+    memcpy(mac_addr,  (char*)(a+1), ETHER_ADDR_LEN);
     memcpy(&addr, (char*)(a+1) + a->ar_hln, 4);
-
-    do_arp_update (ifindex, addr, mac_addr);
+            
+    do_arp_update (ifindex, ntohl(addr), mac_addr);
     
     return 0;
 }
