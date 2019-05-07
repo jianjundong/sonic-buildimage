@@ -278,6 +278,9 @@ int mlacp_fsm_arp_del(char *ifname, uint32_t ip)
                         /*If local if is down, redirect the mac to peer-link*/
                         memcpy(&mac_msg->ifname, csm->peer_itf_name, IFNAMSIZ);
 
+                        /*If local if is down, set MAC_AGE_LOCAL flag*/
+                        mac_msg->age_flag = set_mac_local_age_flag(csm, mac_msg, 1);
+
                         /*sleep 10ms, avoid orchagent mix the del event*/
                         /*usleep(100000);*/
                         

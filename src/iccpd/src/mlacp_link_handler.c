@@ -419,15 +419,10 @@ void update_peerlink_isolate_from_all_csm_lif (
 
         ICCPD_LOG_DEBUG(__FUNCTION__, "isolate src %s, data %s, len %d",src_buf, sub_msg->data, src_len); 
     }
-    else if(csm->peer_link_if->type == IF_T_PORT)
+    else
     {
     	src_len= strlen(csm->peer_link_if->name); 	
     	memcpy(sub_msg->data, csm->peer_link_if->name, src_len);
-    }
-    else
-    {
-    	src_len= strlen(csm->peer_link_if->portchannel_member_buf); 	
-    	memcpy(sub_msg->data, csm->peer_link_if->portchannel_member_buf, src_len);
     }
     sub_msg->op_len = src_len;
 
@@ -1187,8 +1182,8 @@ will recalculate after peer connected.*/
         ICCPD_LOG_DEBUG(__FUNCTION__, "Add peer age flag: %s, add %s vlan-id %d, op_type %d", 
                                 mac_msg->ifname,mac_msg->mac_str, mac_msg->vid, mac_msg->op_type);
 
-        /* find the MAC that the port is peer-link*/
-        if (strcmp(mac_msg->ifname, csm->peer_itf_name) != 0)
+        /* find the MAC that the port is peer-link or local and peer both aged, to be deleted*/
+        if (strcmp(mac_msg->ifname, csm->peer_itf_name) != 0 && mac_msg->age_flag != (MAC_AGE_LOCAL|MAC_AGE_PEER))
             continue;
 
         ICCPD_LOG_DEBUG(__FUNCTION__, "Peer disconnect, del MAC for peer-link: %s, MAC %s vlan-id %d", 
